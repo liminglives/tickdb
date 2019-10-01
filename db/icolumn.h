@@ -1,6 +1,10 @@
 #pragma once
 
+#include <string.h>
+#include <stdlib.h>
+
 #include <vector>
+#include <string>
 
 namespace TickDB {
 
@@ -14,8 +18,8 @@ enum ValueType {
     INT32 = 7,
     INT64 = 8,
     FLOAT32 = 9,
-    FLOAT64 = 9,
-    STRING = ,
+    FLOAT64 = 10,
+    STRING = 11,
 };
 
 
@@ -33,6 +37,9 @@ public:
         return _size;
     }
 
+    Value(const Value& v) = default;
+    Value& operator=(const Value& v) = default;
+
     template <typename T> 
     T get() {
         return *(static_cast<T*>(static_cast<void*>(_data)));
@@ -47,7 +54,7 @@ public:
 private:
     char* _data;
     size_t _size;
-}
+};
 
 class IColumn {
 public:
@@ -59,31 +66,8 @@ public:
 
     virtual void insert(const Value& val) = 0; 
 
-    virtual Value at(size_t n) = 0; 
+    virtual Value at(const size_t n) = 0; 
 
-};
-
-template <typename T>
-class ColumnVector : public IColumn {
-public:
-    using Container = std::vector<T>;
-
-public:
-    ColumnVector() {};
-    ColumnVector(const size_t n) : data(n, T()) {};
-    ColumnVector(const size_t n, const T& x) :data(n, x) {};
-    ~ColumnVector();
-
-    void insert(const Value& val) override {
-        data.push_back(val);
-    }
-
-    Value at(cosnt size_t n) {
-        return std::move(data.at(n));
-    }
-
-private:
-    Container data;
 };
 
 template <typename T>
@@ -98,6 +82,13 @@ public:
 
     DataArray(size_t n) {
         alloc(n);
+    }
+
+    DataArray(size_t n, const T& v) {
+        alloc(n);
+        for (int i = 0; i < n; ++i) {
+            memcpy(_buf + byte_size(i), reinterpret_cast<void*>(&v), sizeof(T));
+        }
     }
 
     ~DataArray() {
@@ -118,7 +109,7 @@ public:
 
     void push_back(const Value& val) {
         if (_len + val.size() > _capacity) { // unlikely
-            realloc()
+            realloc();
         }
         memcpy(_buf + _len, val.data(), val.size());
     }
@@ -128,10 +119,12 @@ private:
     void alloc(size_t n) {
         _capacity = byte_size(n);
         _buf = static_cast<char*>(malloc(_capacity)); // TODO: optimize memory alloc
+        memset(_buf, 0, _capacity);
     }
 
     void realloc(size_t bytes) {
-        _capacity = _capacity * 2;
+        _capacity = _capacity == 0 ? 2 : _capacity * 2;
+        //_capacity = _capacity * 2;
         _buf = static_cast<char*>(realloc(_buf, _capacity));
     }
 
@@ -144,6 +137,30 @@ private:
     char* _buf = nullptr;
     size_t _len = 0;
     size_t _capacity = 0;
+};
+
+template <typename T>
+class ColumnVector : public IColumn {
+public:
+    //using Container = std::vector<T>;
+    using Container = DataArray<T>;
+
+public:
+    ColumnVector() {};
+    ColumnVector(const size_t n) : data(n) {};
+    ColumnVector(const size_t n, const T& x) :data(n, x) {};
+    ~ColumnVector();
+
+    void insert(const Value& val) override {
+        data.push_back(val);
+    }
+
+    Value at(const size_t n)  override {
+        return std::move(data.at(n));
+    }
+
+private:
+    Container data;
 };
 
 
