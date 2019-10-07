@@ -55,7 +55,7 @@ public:
         return true;
     }
 
-    static std::string pack_time_series_del_params(const std::string& key, 
+    static std::string pack_time_series_del_params2(const std::string& key, 
             uint64_t ts_start, uint64_t ts_end, uint32_t type) {
         uint32_t key_len = key.size();
         uint32_t data_len = sizeof(uint32_t) + key_len + sizeof(uint64_t) * 2;
@@ -75,6 +75,23 @@ public:
     
         return std::move(data);
     }
+
+    static std::string pack_time_series_del_params(const Slice& key, 
+            uint64_t ts_start, uint64_t ts_end, uint32_t type) {
+        uint32_t key_len = key.size();
+        uint32_t data_len = sizeof(uint32_t) + key_len + sizeof(uint64_t) * 2;
+
+        std::string data;
+        data.reserve(data_len);
+        data.append(static_cast<char*>(static_cast<void*>(&key_len)), sizeof(key_len));
+        data.append(key.data(), key_len);
+        data.append(static_cast<char*>(static_cast<void*>(&ts_start)), sizeof(ts_start));
+        data.append(static_cast<char*>(static_cast<void*>(&ts_end)), sizeof(ts_end));
+        data.append(static_cast<char*>(static_cast<void*>(&type)), sizeof(type));
+    
+        return std::move(data);
+    }
+ 
  
     static bool unpack_time_series_del_params(char* data, uint32_t data_len, 
             std::string& key, uint64_t& ts_start, uint64_t& ts_end, uint32_t& type) {

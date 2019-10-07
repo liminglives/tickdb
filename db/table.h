@@ -108,12 +108,13 @@ public:
             output->init(data_addr + sizeof(RowHeader), row_header.len);
         }
         Slice row(data_addr, sizeof(RowHeader) + row_header.len);
-        // TODO: leak
-        process(row);
+        if (_data_index != nullptr) {
+            do_index(row);
+        }
         return true;
     }
 
-    void process(Slice& row) {
+    void do_index(Slice& row) {
         RowHeader* row_header = (RowHeader*)(row.data());
         Slice data(row.data() + sizeof(RowHeader), row_header->len);
         switch (RowParser::row_type(row)) {
@@ -134,19 +135,23 @@ public:
     }
 
     void insert_to_index(Slice& hrow) {
-        if (_data_index != nullptr) {
-            Slice row(hrow);
-            row.remove_prefix(sizeof(RowHeader));
-            _data_index->insert(_data_parser->key(RowParser::row_data(hrow)), 
-                    _data_parser->index(RowParser::row_data(hrow)), row);
-        }
+        Slice row(hrow);
+        row.remove_prefix(sizeof(RowHeader));
+        _data_index->insert(_data_parser->key(RowParser::row_data(hrow)), 
+                   _data_parser->index(RowParser::row_data(hrow)), row);
     }
 
-    void del_from_index(Slice& row) {
+    void del_from_index(Slice& hrow) {
+        _data_index->del(hrow);
     }
 
     // [ts_start, ts_end]
-    void del(const Slice& key, uint64_t ts_start, uint64_t ts_end);
+    bool del(const Slice& key, uint64_t ts_start, uint64_t ts_end) {
+        std::string data;
+        data = Common::pack_time_series_del_params(key, ts_start, ts_end, IndexType_TimeSeries);
+        return append(Slice(data), RowType_Del);
+    }
+
     // [date_start, date_end]
     void del(const std::string& date_start, const std::string& date_end);
 

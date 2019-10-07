@@ -14,8 +14,8 @@ public:
     IDataIndex(EnumIndexType type) : _type(type) {}
     virtual ~IDataIndex() {}
 
-    virtual void insert(const Slice& key, const Slice& ts, const Slice& row) = 0;
-    virtual void del(const Slice& key, const Slice& start, const Slice& end) = 0;
+    virtual void insert(const Slice& key, const Slice& val, const Slice& row) = 0;
+    virtual void del(const Slice& row) = 0;
 
     EnumIndexType type() {
         return _type;
@@ -65,7 +65,21 @@ public:
         insert(str_key, int_ts, row);
     }
 
-    void del(const Slice& key, const Slice& start, const Slice& end) override {
+    void del(const Slice& row) override {
+        Slice data_row(row);
+        data_row.remove_prefix(sizeof(RowHeader));
+        std::string key;
+        uint64_t ts_start = 0;
+        uint64_t ts_end = 0;
+        uint32_t type = 0;
+
+        if (!Common::unpack_time_series_del_params(const_cast<char*>(data_row.data()), data_row.size(), key, ts_start, ts_end, type)) {
+            Throw("parse del params failed");
+        }
+
+        //assert(static_cast<EnumIndexType>(type) == IndexType_TimeSeries);
+
+        del(key, ts_start, ts_end);
     }
 
     void insert(const std::string& key, uint64_t ts, const Slice& row) {
@@ -156,10 +170,10 @@ public:
     KVDataIndex() : IDataIndex(IndexType_KV) {}
     ~KVDataIndex() {}
 
-    void insert(const Slice& key, const Slice& ts, const Slice& row) override {
+    void insert(const Slice& key, const Slice& val, const Slice& row) override {
     }
 
-    void del(const Slice& key, const Slice& start, const Slice& end) override {
+    void del(const Slice& row) override {
     }
 
     void insert(const std::string& key, const Slice& row) {
