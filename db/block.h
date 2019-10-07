@@ -1,5 +1,10 @@
 #pragma once
 
+#include <string.h>
+
+#include "tickdb/defines.h"
+#include "db/memory_allocator.h"
+
 namespace TickDB {
 
 struct BlockHeader {
@@ -9,21 +14,21 @@ struct BlockHeader {
 
 class Block {
 public:
-    Block();
+    Block() = default;
     ~Block() {
-        if (_owner && _buf != nullptr) {
-            free(nullptr);
-            _buf = nullptr;
+        if (_memory_block != nullptr) {
+            delete _memory_block;
         }
     }
 
     // init a new block 
-    bool init(char* buf, uint64_t capacity) {
-        _owner = true;
-        _buf = buf;
+    bool init(MemoryBlock* memory_block) {
+        _memory_block = memory_block;
+        _buf = memory_block->data();
+        uint64_t capacity = memory_block->size();
 
         if (capacity < sizeof(BlockHeader)) {
-            LOG("error, block capacity is less than sizeof BlockHeader")
+            Log("error, block capacity is less than sizeof BlockHeader");
             return false;
         }
 
@@ -34,10 +39,10 @@ public:
         return true;
     }
 
-    // init from exist block
-    bool init(char* buf) {
-        _owner = false;
-        _buf = buf;
+    // watch an exist block
+    bool watch(MemoryBlock* memory_block) {
+        _memory_block = memory_block;
+        _buf = memory_block->data();
 
         _header = static_cast<BlockHeader*>(static_cast<void*>(_buf));
 
@@ -59,13 +64,11 @@ public:
         return start;
     }
 
-    const char* append_line(const Slic)
-
 private:
+    MemoryBlock* _memory_block = nullptr;
+
     char* _buf = nullptr;
     BlockHeader* _header = nullptr;
-
-    bool _owner = false;
     
 };
 
