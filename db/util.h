@@ -52,6 +52,8 @@ std::string& trim(std::string &s);
 
 std::time_t getTimeStamp();
 
+std::string to_date(uint64_t timestamp);
+
 bool file_exists(const std::string& path);
 
 uint64_t get_file_size(const std::string& fname);

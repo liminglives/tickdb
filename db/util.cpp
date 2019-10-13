@@ -59,6 +59,14 @@ std::time_t getTimeStamp() {
     return timestamp;
 }
 
+std::string to_date(uint64_t timestamp) {
+    time_t t = timestamp + 8*3600;
+    struct tm *p = gmtime(&t);
+    char s[32] = {0};
+    strftime(s, 80, "%Y-%m-%d", p);
+    return std::string(s);
+}
+
 bool file_exists(const std::string& path) {
     return access(path.c_str(), F_OK) == 0;
 }
