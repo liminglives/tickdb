@@ -58,22 +58,28 @@ TEST_F(FlowDBTest, TestInit) {
     ASSERT_TRUE(row);
     //std::cout << "ret size " << row->size() << std::endl;
 
-    int64_t id;
-    ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "id", &id) == FlowBuffer::RET_OK);
-    ASSERT_TRUE(id == 100);
+    {
+        int64_t id;
+        ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "id", &id) == FlowBuffer::RET_OK);
+        ASSERT_TRUE(id == 100);
 
-    uint64_t ts;
-    ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "ts", &ts) == FlowBuffer::RET_OK);
-    ASSERT_TRUE(ts == 100001);
+        uint64_t ts;
+        ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "ts", &ts) == FlowBuffer::RET_OK);
+        ASSERT_TRUE(ts == 100001);
 
-    float price;
-    ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "price", &price) == FlowBuffer::RET_OK);
-    //std::cout << "price " << price << std::endl;
-    ASSERT_TRUE(price == 10.25);
+        float price;
+        ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "price", &price) == FlowBuffer::RET_OK);
+        //std::cout << "price " << price << std::endl;
+        ASSERT_TRUE(price == 10.25);
 
-    double size;
-    ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "size", &size) == FlowBuffer::RET_OK);
-    ASSERT_TRUE(size == 100000.25);
+        double size;
+        ASSERT_TRUE(FlowBuffer::get(flowbuffer_meta, const_cast<char*>(row->data()), "size", &size) == FlowBuffer::RET_OK);
+        ASSERT_TRUE(size == 100000.25);
+    }
+
+    ASSERT_TRUE(table->size(TickDB::Slice(key)) == 2);
+    ASSERT_TRUE(table->del(TickDB::Slice(key), 100000, 100001));
+    ASSERT_TRUE(table->size(TickDB::Slice(key)) == 0);
 
 }
 

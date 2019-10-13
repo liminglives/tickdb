@@ -1,25 +1,26 @@
 #pragma once
 
+#include <limits>
+
 #include "tickdb/flowbuffer.h"
 #include "tickdb/data_index.h"
 #include "tickdb/slice.h"
 #include "tickdb/defines.h"
 #include "tickdb/option.h"
+
 #include "db/data_parser.h"
 #include "db/block.h"
 #include "db/memory_allocator.h"
 #include "db/util.h"
+#include "db/common.h"
 
 namespace TickDB {
 
 struct BlockInfo {
     Block* block = nullptr;
 
-    uint64_t ts_start = 0;
-    uint64_t ts_end = 0;
-
-    uint64_t ts_avai_start = 0;
-    uint64_t ts_avai_end = 0;
+    uint64_t ts_del_start = 0;
+    uint64_t ts_del_end = 0;
 
     std::string date;
 
@@ -137,8 +138,18 @@ public:
     void insert_to_index(Slice& hrow) {
         Slice row(hrow);
         row.remove_prefix(sizeof(RowHeader));
+        Slice index = _data_parser->index(RowParser::row_data(hrow));
         _data_index->insert(_data_parser->key(RowParser::row_data(hrow)), 
-                   _data_parser->index(RowParser::row_data(hrow)), row);
+                   index, row);
+        //if (_index_type == IndexType_TimeSeries) {
+        //    BlockInfo* block_info = get_latest_block_info();
+        //    uint64_t int_ts = index.get<uint64_t>();
+        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
+        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
+
+        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
+        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
+        //}
     }
 
     void del_from_index(Slice& hrow) {
@@ -162,6 +173,14 @@ public:
 
     const ::FlowBuffer::FlowBufferMeta* get_flowbuffer_meta() {
         return &_flowbuffer_meta;
+    }
+
+    size_t size(const Slice& key) {
+        return _data_index->size(key);
+    }
+
+    std::vector<Slice> keys() {
+        return _data_index->keys();
     }
 
 private:

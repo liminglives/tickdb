@@ -6,6 +6,7 @@
 #include "tickdb/defines.h"
 
 #include "db/timeline.h"
+#include "db/common.h"
 
 namespace TickDB {
 
@@ -16,6 +17,9 @@ public:
 
     virtual void insert(const Slice& key, const Slice& val, const Slice& row) = 0;
     virtual void del(const Slice& row) = 0;
+
+    virtual size_t size(const Slice& key) = 0;
+    virtual std::vector<Slice> keys() = 0;
 
     EnumIndexType type() {
         return _type;
@@ -76,6 +80,8 @@ public:
         if (!Common::unpack_time_series_del_params(const_cast<char*>(data_row.data()), data_row.size(), key, ts_start, ts_end, type)) {
             Throw("parse del params failed");
         }
+
+        std::cout << "del start:" << ts_start << " end:" << ts_end << std::endl;
 
         //assert(static_cast<EnumIndexType>(type) == IndexType_TimeSeries);
 
@@ -155,14 +161,21 @@ public:
         return tl == NULL ? false : tl->shift_right(ts, n, rows);
     }
 
-    size_t size(const std::string& key) {
-        Timeline* tl = get_timeline(key);
+    size_t size(const Slice& key) override {
+        Timeline* tl = get_timeline(key.to_string());
         return tl == NULL ? 0 : tl->size();
     }
-    
+
+    std::vector<Slice> keys() override {
+        std::vector<Slice> ret;
+        for (auto it : _timeline_map) {
+            ret.emplace_back(it.first);
+        }
+        return std::move(ret);
+    }
+
 private:
     std::unordered_map<std::string, Timeline*> _timeline_map;
-    //IData* _idata = NULL;
 };
 
 class KVDataIndex : public IDataIndex {
@@ -193,10 +206,14 @@ public:
         return &(it->second);
     }
 
-    std::vector<std::string> keys() {
-        std::vector<std::string> ret;
+    size_t size(const Slice& key) override {
+        return _data_map.find(key.to_string()) == _data_map.end() ? 0 : 1;
+    }
+
+    std::vector<Slice> keys() override {
+        std::vector<Slice> ret;
         for (auto it : _data_map) {
-            ret.push_back(it.first);
+            ret.emplace_back(it.first);
         }
         return std::move(ret);
     }
