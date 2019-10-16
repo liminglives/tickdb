@@ -119,6 +119,10 @@ struct ColMeta {
     int index;
 };
 
+template <typename T>
+void convert(char* data, T& out) {
+    out = *(static_cast<T*>(static_cast<void*>(data)));
+}
 
 
 class FlowBufferMeta {
@@ -274,6 +278,16 @@ public:
 
     template <class T> void set(const std::string& col_name, const T& val) {
        const ColMeta& col_meta = _river_meta->get_col_meta(col_name);
+       set(col_meta, val);
+       //if (sizeof(T) != col_meta.size) {
+       //    FlowBufferThrow("illegal val size:" + std::to_string(sizeof(T)) + " col size:" + std::to_string(col_meta.size));
+       //}
+       //uint32_t offset = col_meta.offset;
+       //memcpy(_buf + offset, static_cast<void*>(const_cast<T *>(&val)), sizeof(T));
+       //set_none(col_meta.none_offset);
+    }
+
+    template <class T> void set(const ColMeta& col_meta, const T& val) {
        if (sizeof(T) != col_meta.size) {
            FlowBufferThrow("illegal val size:" + std::to_string(sizeof(T)) + " col size:" + std::to_string(col_meta.size));
        }
@@ -282,12 +296,104 @@ public:
        set_none(col_meta.none_offset);
     }
 
+
+
+    void auto_set(const std::string& col_name, const std::string& col_value) {
+       const ColMeta& col_meta = _river_meta->get_col_meta(col_name);
+        switch (col_meta.enum_type) {
+            case DT_DOUBLE: 
+            {
+                double v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, v);
+                break;
+            }
+            case DT_UINT64: 
+            {
+                uint64_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, v);
+                break;
+            }
+            case DT_FLOAT: 
+            {
+                float v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, v);
+                break;
+            }
+
+            case DT_INT64: 
+            {
+                int64_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, v);
+                break;
+            }
+
+            case DT_STRING: 
+            {
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_INT32: 
+            {
+                int32_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_INT16: 
+            {
+                int16_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_INT8: 
+            {
+                int8_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_UINT32: 
+            {
+                uint32_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_UINT16: 
+            {
+                uint16_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            case DT_UINT8: 
+            {
+                uint8_t v;
+                convert(const_cast<char*>(col_value.c_str()), v);
+                set(col_meta, col_value);
+                break;
+            }
+            default:
+                FlowBufferThrow("col_name:" + col_name + " with unknown type:" + std::to_string(col_meta.enum_type));
+        }
+
+    }
+
     void* data() {
         return (void*)_buf;
     }
 
     uint32_t size() {
         return _data_len;
+    }
+
+    const FlowBufferMeta* meta() {
+        return _river_meta;
     }
 
 private:
