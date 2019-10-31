@@ -23,5 +23,6 @@ SET(CMAKE_CXX_FLAGS "-std=c++11 -g")
 
 ADD_LIBRARY(tickdb STATIC ${TICKDB_SRC})
 SET_TARGET_PROPERTIES(tickdb PROPERTIES OUTPUT_NAME "tickdb")
+target_link_libraries(tickdb -lpthread -lrt)
 
 

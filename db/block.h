@@ -64,6 +64,22 @@ public:
         return start;
     }
 
+    const MemoryBlock* memory_block() {
+        return _memory_block;
+    }
+
+    const BlockHeader* block_header() {
+        return _header;
+    }
+
+    uint64_t size() {
+        return _header->len;
+    }
+
+    const char* data() {
+        return _memory_block->data();
+    }
+
 private:
     MemoryBlock* _memory_block = nullptr;
 
@@ -71,5 +87,37 @@ private:
     BlockHeader* _header = nullptr;
     
 };
+
+class BlockReader {
+public:
+    BlockReader(Block* block) {
+        _pos = sizeof(BlockHeader);
+        _block_start = const_cast<char*>(block->data());
+        _size = block->size();
+    }
+    ~BlockReader() = default;
+
+    bool next(Slice& row) {
+        if (_pos >= _size) {
+            return false;
+        }
+
+        char* cur = _block_start + _pos;
+
+        RowHeader* row_header = static_cast<RowHeader*>(static_cast<void*>(cur));
+        row.init(cur, row_header->len);
+
+        _pos += sizeof(RowHeader) + row_header->len;
+
+        return true;
+    }
+
+private:
+    char* _block_start;
+    uint64_t _pos = 0;
+    uint64_t _size = 0;
+};
+
+
 
 } // namespace TickDB

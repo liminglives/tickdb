@@ -55,14 +55,14 @@ public:
         return _table_manager.get_all_table_name();
     }
 
-    bool read_csv(const std::string& table_name, const std::string& csvfile_path) {
-        Table* table = get_table(table_name);
-        if (!table) {
-            Log("table " + table_name + " do not exist");
-            return false;
-        }
-        return read_csv(table, csvfile_path);
-    }
+    //bool read_csv(const std::string& table_name, const std::string& csvfile_path) {
+    //    Table* table = get_table(table_name);
+    //    if (!table) {
+    //        Log("table " + table_name + " do not exist");
+    //        return false;
+    //    }
+    //    return read_csv(table, csvfile_path);
+    //}
 
 private:
     TableManager _table_manager;

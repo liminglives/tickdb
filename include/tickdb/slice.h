@@ -68,7 +68,7 @@ public:
     }
 
     template <typename T> 
-    const T* get_ptr() const {
+    T* get_ptr() const {
         return static_cast<T*>(static_cast<void*>(const_cast<char*>(_data)));
     }
 

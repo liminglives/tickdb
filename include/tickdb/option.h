@@ -13,7 +13,9 @@ struct TableOption {
     uint64_t block_size = 1024 * 1024;
     EnumTableType table_type = TableType_Normal;
 
-    std::vector<int> shm_key_vec;
+    uint32_t shm_meta_size = 32 * 1024;
+
+    std::string shm_name;
 };
 
 struct Option {

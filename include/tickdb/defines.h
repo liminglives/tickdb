@@ -6,13 +6,16 @@ struct RowHeader {
     uint32_t len = 0;
     uint8_t type = 0;
     uint8_t proto = 0; // only flowbuffer
-    uint16_t reserved = 0; 
+    uint8_t status = 0; // 0: available, 1: deleted 
+    uint8_t reserved = 0; 
 };
 
 enum EnumRowType {
     RowType_Insert = 0,
     RowType_Del = 1,
     RowType_TableHeader = 2,
+    RowType_TableScale = 3,
+    RowType_TableSHMMeta = 4,
 };
 
 enum EnumIndexType {

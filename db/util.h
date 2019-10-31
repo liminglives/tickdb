@@ -38,45 +38,17 @@ private:
 
 namespace Util {
 
+//////// search
+
 const int BinarySearchLEFlag = -1;
 const int BinarySearchGEFlag = 1;
 const int BinarySearchEqualFlag = 0;
 const int BinarySearchLTFlag = -2;
 const int BinarySearchGTFlag = 2;
 
-
-
-void split(const std::string& src, const std::string& separator, std::vector<std::string>& dest);
-
-std::string& trim(std::string &s);
-
-std::time_t getTimeStamp();
-
-std::string to_date(uint64_t timestamp);
-
-bool file_exists(const std::string& path);
-
-uint64_t get_file_size(const std::string& fname);
-
 int binary_search(const std::vector<uint64_t>& ts_vec, uint64_t ts, int flag, int start = 0, int end = -1); 
 
 void sort_insert(std::vector<uint64_t>& ts_vec, uint64_t ts);
-
-
-bool to_kv(const std::string& str, std::string& k, std::string& v);
-bool to_kv_map(const std::string& str, std::unordered_map<std::string, std::string>& kv_map);
-bool to_kv_vec(const std::string& str, std::vector<std::pair<std::string, std::string>>& kv_vec);
-
-template <class T> 
-void serialize(const T& val, std::string& str) {
-    str.assign(static_cast<char*>(static_cast<void*>(const_cast<T *>(&val))), sizeof(T));
-}
-
-void serialize(const char* val, std::string& str); 
-
-uint64_t hashcode(const std::string& str); 
-
-std::vector<std::string> to_lines(const std::string& data); 
 
 template<typename T>
 int binary_search(const std::vector<T>& vec, const T& target, int flag, int start = 0, int end = -1) {
@@ -128,6 +100,42 @@ void sort_insert2(std::vector<T>& vec, const T& item) {
         vec.insert(vec.begin() + pos, item);
     }
 }
+
+
+
+//////// string
+void split(const std::string& src, const std::string& separator, std::vector<std::string>& dest);
+
+std::string& trim(std::string &s);
+
+
+bool to_kv(const std::string& str, std::string& k, std::string& v);
+bool to_kv_map(const std::string& str, std::unordered_map<std::string, std::string>& kv_map);
+bool to_kv_vec(const std::string& str, std::vector<std::pair<std::string, std::string>>& kv_vec);
+
+template <class T> 
+void serialize(const T& val, std::string& str) {
+    str.assign(static_cast<char*>(static_cast<void*>(const_cast<T *>(&val))), sizeof(T));
+}
+
+void serialize(const char* val, std::string& str); 
+
+uint64_t hashcode(const std::string& str); 
+
+std::vector<std::string> to_lines(const std::string& data); 
+
+
+
+//////// file
+bool file_exists(const std::string& path);
+
+uint64_t get_file_size(const std::string& fname);
+
+
+/////// time
+std::time_t get_timestamp();
+
+std::string to_date(uint64_t timestamp);
 
 } // namespace Util
 } // namespace TickDB

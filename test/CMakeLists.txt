@@ -39,7 +39,7 @@ ENDIF()
 #SET(CMAKE_CXX_FLAGS "-std=c++11 -g -pthread -ftest-coverage -fprofile-arcs -Wno-deprecated")
 SET(CMAKE_CXX_FLAGS "-std=c++11 -g -pthread")
 
-SET(TEST_TICKDB ${TICKDB_SRC} test_tickdb.cpp)
-ADD_EXECUTABLE(test_tickdb ${TEST_TICKDB})
-target_link_libraries(test_tickdb -lpthread -lgtest -lgtest_main)
+SET(TEST_TICKDB ${TICKDB_SRC} tickdb_test.cpp)
+ADD_EXECUTABLE(tickdb_test ${TEST_TICKDB})
+target_link_libraries(tickdb_test -lpthread -lgtest -lgtest_main -lrt)
 

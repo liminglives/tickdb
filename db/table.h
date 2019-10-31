@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <unordered_set>
 
 #include "tickdb/flowbuffer.h"
 #include "tickdb/data_index.h"
@@ -32,11 +33,45 @@ struct BlockInfo {
     }
 };
 
-struct TableDataHeader {
-    uint64_t data_len;
-    uint64_t capacity;
-    int16_t status;
+struct TableScale {
+    uint64_t data_len = 0;
+    int16_t status = 0;
 };
+
+class TableSHMMeta {
+public:
+    TableSHMMeta(Slice& meta) : _shm_meta(meta), _raw_shm_meta(meta) {}
+    ~TableSHMMeta() = default;
+
+    bool next(std::string& shm_name) {
+        if (_shm_meta.size() < sizeof(uint32_t)) {
+            Log("shm reach limits, it has no more next table block");
+            return false;
+        }
+        uint32_t val_len = _shm_meta.get<uint32_t>();
+        if (val_len == 0) {
+            Log("shm has no next table block yet");
+            return false;
+        }
+
+        _shm_meta.remove_prefix(sizeof(val_len));
+        if (_shm_meta.size() < val_len) {
+            Log("shm has error next table block");
+            return false;
+        }
+        Slice next_block_name(_shm_meta.data(), val_len);
+        _shm_meta.remove_prefix(val_len);
+
+        shm_name = next_block_name.to_string();
+
+        return true;
+    }
+
+private:
+    Slice _shm_meta;
+    Slice _raw_shm_meta;
+};
+
 
 class RowParser { 
 public:
@@ -73,7 +108,14 @@ public:
             delete item;
         }
 
-        //delete [] _block_info_vec;
+        if (_table_scale) {
+            delete _table_scale;
+        }
+
+        if (_table_shm_meta) {
+            delete _table_shm_meta;
+        }
+
     }
 
     bool init(const TableOption& opt) {
@@ -88,10 +130,65 @@ public:
         if (_table_type == TableType_Shared) {
             Slice data(opt.table_header);
             append(data, RowType_TableHeader, nullptr);
+
+            TableScale table_scale;
+            Slice scale_data(&(table_scale), sizeof(TableScale));
+            append(scale_data, RowType_TableScale);
+
+            char* shm_meta = (char*)malloc(opt.shm_meta_size);
+            memset(shm_meta, 0, opt.shm_meta_size);
+            append(Slice(shm_meta, opt.shm_meta_size), RowType_TableSHMMeta);
         }
 
         return true;
     }
+
+    bool init_from_shm(const TableOption& opt) {
+        _table_name = opt.table_name;
+        _table_type = opt.table_type;
+
+        // parse first shm block
+        parse_shm(opt.shm_name);
+        // update shm block according to first shm block
+        update_shm();
+
+        return true;
+    }
+
+    void update_shm() {
+        if (_table_shm_meta == nullptr) {
+            return;
+        }
+
+        std::string shm_name;
+        while (_table_shm_meta->next(shm_name)) {
+            parse_shm(shm_name);
+        }
+
+    }
+
+    void parse_shm(const std::string& shm_name) {
+        if (_loaded_shm_name_set.find(shm_name) == _loaded_shm_name_set.end()) {
+            Log("had loaded shm block:" + shm_name);
+            return;
+        }
+        BlockInfo* block_info = new_block_info(0, shm_name);
+        if (block_info == nullptr) {
+            Throw("watch shm block failed, shm:" + shm_name);
+        }
+
+        read_block(block_info->block);
+        _loaded_shm_name_set.insert(shm_name);
+    } 
+
+    void read_block(Block* block) {
+        BlockReader reader(block);
+        Slice row;
+        while(reader.next(row)) {
+            process(row);
+        }
+    }
+
 
     bool append(const Slice& data, EnumRowType row_type = RowType_Insert, Slice* output = nullptr) {
         RowHeader row_header;
@@ -110,12 +207,12 @@ public:
         }
         Slice row(data_addr, sizeof(RowHeader) + row_header.len);
         if (_data_index != nullptr) {
-            do_index(row);
+            process(row);
         }
         return true;
     }
 
-    void do_index(Slice& row) {
+    void process(Slice& row) {
         RowHeader* row_header = (RowHeader*)(row.data());
         Slice data(row.data() + sizeof(RowHeader), row_header->len);
         switch (RowParser::row_type(row)) {
@@ -130,6 +227,10 @@ public:
                     parse_header(data.to_string());
                 }
                 break;
+            case RowType_TableScale: 
+                _table_scale = data.get_ptr<TableScale>();
+            case RowType_TableSHMMeta: 
+                _table_shm_meta = new TableSHMMeta(data);
             default:
                 Throw("unknown row type:" + std::to_string(RowParser::row_type(row)));
         }
@@ -184,9 +285,38 @@ public:
     }
 
 private:
-    BlockInfo* new_block_info(uint64_t block_size) {
+
+    std::string gen_block_name() {
+        return _table_name + "_block_" + std::to_string(_block_info_vec.size());
+    }
+
+    MemoryBlock* new_memory_block(uint64_t block_size, const std::string& block_name = "") {
+        MemoryBlock* ret = nullptr;
+        switch (_table_type) {
+            case TableType_Normal:
+                ret = MemoryAllocator::create_memory_block(block_size);
+                break;
+            case TableType_Shared:
+                ret = MemoryAllocator::create_share_memory_block(gen_block_name(), block_size);
+                break;
+            case TableType_Watcher:
+                ret = MemoryAllocator::watch_share_memory_block(block_name);
+                break;
+            default:
+                Throw("unknown table type:" + std::to_string(_table_type));
+        }
+        if (ret == nullptr) {
+            Throw("new memory block failed, block_size:" + std::to_string(block_size));
+        }
+        return ret;
+    }
+
+    BlockInfo* new_block_info(uint64_t block_size, const std::string& block_name = "") {
         Block* block = new Block();
-        MemoryBlock* memory_block = MemoryAllocator::create_memory_block(block_size);
+        MemoryBlock* memory_block = new_memory_block(block_size, block_name);
+        if (memory_block == nullptr) {
+            return nullptr;
+        }
         block->init(memory_block);
 
         BlockInfo* block_info = new BlockInfo;
@@ -195,6 +325,7 @@ private:
 
         return block_info;
     }
+
 
     BlockInfo* get_latest_block_info() {
         if (_block_info_vec.empty()) {
@@ -294,7 +425,11 @@ private:
     EnumTableType _table_type;
     EnumIndexType _index_type;
     EnumDataType _data_type;
-    
+
+    TableScale* _table_scale = nullptr;
+    TableSHMMeta* _table_shm_meta = nullptr;
+    std::unordered_set<std::string> _loaded_shm_name_set;
+
     ::FlowBuffer::FlowBufferMeta _flowbuffer_meta;
 
     std::vector<BlockInfo*> _block_info_vec;
