@@ -1,8 +1,10 @@
 #pragma once
 
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 #include "db/util.h"
 
@@ -26,15 +28,15 @@ public:
         return "";
     }
 
-    virtual char* data() const {
+    char* data() const {
         return _data;
     }
 
-    virtual size_t size() const {
+    size_t size() const {
         return _size;
     }
     
-private:
+protected:
     char* _data = nullptr;
     size_t _size = 0;
 };
@@ -47,9 +49,11 @@ public:
             close(_shmid);
         }
         if (_is_create) {
+            Log("unlink shm " + _name);
             shm_unlink(_name.c_str());
             munmap(_data, _size);
         }
+        _data = nullptr;
     }
 
     bool create(const std::string& name, uint64_t size) {
@@ -70,7 +74,9 @@ public:
             Log("mmap failed, " + name);
             return false;
         }
-        Log("create share memory " + name + " success, size:" + std::to_string(size));
+
+        Log("create share memory [" + name + "] success, size:" + std::to_string(size));
+        _size = size;
         _is_create = true;
         return true;
     }
@@ -95,7 +101,9 @@ public:
             return false;
         }
 
-        Log("watch share memory " + name + " sucess, mmap size:" + std::to_string(sb.st_size));
+        Log("watch share memory [" + name + "] sucess, mmap size:" + std::to_string(sb.st_size));
+
+        _size = sb.st_size;
 
         _is_create = false;
         return true;
@@ -105,19 +113,17 @@ public:
         return _name;
     }
 
-    char* data() const override {
+    char* data() const {
         return _data;
     }
 
-    size_t size() const override {
+    size_t size() const {
         return _size;
     }
 
 private:
     bool _is_create = false;
     int _shmid = -1;
-    size_t _size = 0;
-    char* _data = nullptr;
     std::string _name;
 };
 

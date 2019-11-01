@@ -10,7 +10,11 @@ namespace TickDB {
 struct BlockHeader {
     uint64_t len;
     uint64_t capacity;
+    uint32_t status; // 0: still can writing, 1: ended
 };
+
+const static uint32_t BlockStatus_InWriting = 0;
+const static uint32_t BlockStatus_Ended = 1;
 
 class Block {
 public:
@@ -35,6 +39,7 @@ public:
         _header = static_cast<BlockHeader*>(static_cast<void*>(_buf));
         _header->len = sizeof(BlockHeader);
         _header->capacity = capacity;
+        _header->status = BlockStatus_InWriting;
 
         return true;
     }
@@ -51,7 +56,10 @@ public:
 
     const char* append(const Slice& row_header, const Slice& row) {
         const uint64_t data_size = row_header.size() + row.size();
+
         if ((data_size) > (_header->capacity - _header->len)) {
+            assert(_header->status == BlockStatus_InWriting);
+            _header->status = BlockStatus_Ended;
             return nullptr;
         }
 
@@ -80,25 +88,29 @@ public:
         return _memory_block->data();
     }
 
+    bool end() {
+        return _header->status == BlockStatus_Ended;
+    }
+
 private:
     MemoryBlock* _memory_block = nullptr;
 
     char* _buf = nullptr;
     BlockHeader* _header = nullptr;
-    
+
 };
 
 class BlockReader {
 public:
-    BlockReader(Block* block) {
+    BlockReader(Block* block) : _block(block) {
         _pos = sizeof(BlockHeader);
         _block_start = const_cast<char*>(block->data());
-        _size = block->size();
     }
     ~BlockReader() = default;
 
     bool next(Slice& row) {
-        if (_pos >= _size) {
+        uint64_t size = _block->size();
+        if (_pos >= size) {
             return false;
         }
 
@@ -112,10 +124,14 @@ public:
         return true;
     }
 
+    bool end() {
+        return _block->end();
+    }
+
 private:
+    Block* _block = nullptr;
     char* _block_start;
     uint64_t _pos = 0;
-    uint64_t _size = 0;
 };
 
 

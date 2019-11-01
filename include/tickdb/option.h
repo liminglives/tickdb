@@ -15,6 +15,7 @@ struct TableOption {
 
     uint32_t shm_meta_size = 32 * 1024;
 
+    // for watcher
     std::string shm_name;
 };
 

@@ -97,6 +97,7 @@ class Table {
 public:
     Table() = default;
     ~Table() {
+        Log("Release Table " + _table_name);
         if (_data_parser) {
             delete _data_parser;
         }
@@ -108,12 +109,12 @@ public:
             delete item;
         }
 
-        if (_table_scale) {
-            delete _table_scale;
-        }
-
         if (_table_shm_meta) {
             delete _table_shm_meta;
+        }
+
+        if (_cur_block_reader) {
+            delete _cur_block_reader;
         }
 
     }
@@ -123,72 +124,128 @@ public:
         _default_block_size = opt.block_size;
         _table_type = opt.table_type;
 
-        if (!parse_header(opt.table_header)) {
-            return false;
-        }
+        Log("init table, table_name:" + opt.table_name + " table_type:" + std::to_string(opt.table_type));
 
-        if (_table_type == TableType_Shared) {
-            Slice data(opt.table_header);
-            append(data, RowType_TableHeader, nullptr);
+        if (_table_type == TableType_Watcher) {
+            _first_shm_name = opt.shm_name;
+            if (_first_shm_name.empty()) {
+                Log("missing shm name");
+                return false;
+            }
 
-            TableScale table_scale;
-            Slice scale_data(&(table_scale), sizeof(TableScale));
-            append(scale_data, RowType_TableScale);
+            update();
+            //// parse first shm block
+            //if (!parse_shm(opt.shm_name)) {
+            //    Log("parse first shm block failed");
+            //    return false;
+            //}
+            //// update shm block according to first shm block
+            //update_shm();
 
-            char* shm_meta = (char*)malloc(opt.shm_meta_size);
-            memset(shm_meta, 0, opt.shm_meta_size);
-            append(Slice(shm_meta, opt.shm_meta_size), RowType_TableSHMMeta);
+        } else { // TableType_Normal, TableType_Shared
+
+            if (!parse_header(opt.table_header)) {
+                return false;
+            }
+
+            if (_table_type == TableType_Shared) {
+                Slice data(opt.table_header);
+                append(data, RowType_TableHeader, nullptr);
+
+                TableScale table_scale;
+                Slice scale_data(&(table_scale), sizeof(TableScale));
+                append(scale_data, RowType_TableScale);
+
+                char* shm_meta = (char*)malloc(opt.shm_meta_size);
+                memset(shm_meta, 0, opt.shm_meta_size);
+                append(Slice(shm_meta, opt.shm_meta_size), RowType_TableSHMMeta);
+                delete shm_meta;
+            }
         }
 
         return true;
     }
 
-    bool init_from_shm(const TableOption& opt) {
-        _table_name = opt.table_name;
-        _table_type = opt.table_type;
+    //void update_shm() {
+    //    if (_table_shm_meta == nullptr) {
+    //        return;
+    //    }
 
-        // parse first shm block
-        parse_shm(opt.shm_name);
-        // update shm block according to first shm block
-        update_shm();
+    //    std::string shm_name;
+    //    while (_table_shm_meta->next(shm_name)) {
+    //        parse_shm(shm_name);
+    //    }
+    //}
 
-        return true;
-    }
-
-    void update_shm() {
-        if (_table_shm_meta == nullptr) {
-            return;
-        }
-
+    BlockInfo* next_shm_block() {
         std::string shm_name;
-        while (_table_shm_meta->next(shm_name)) {
-            parse_shm(shm_name);
+        if (!_first_shm_loaded) {
+            shm_name = _first_shm_name;
+            _first_shm_loaded = true;
+        } else {
+            if (!_table_shm_meta->next(shm_name)) {
+                return nullptr;
+            }
         }
-
-    }
-
-    void parse_shm(const std::string& shm_name) {
-        if (_loaded_shm_name_set.find(shm_name) == _loaded_shm_name_set.end()) {
+        if (shm_name.empty()) {
+            Throw("watch shm block name is empty");
+        }
+        
+        if (_loaded_shm_name_set.find(shm_name) != _loaded_shm_name_set.end()) {
             Log("had loaded shm block:" + shm_name);
-            return;
+            return nullptr;
         }
+
+        _loaded_shm_name_set.insert(shm_name);
+        Log("loading shm block:" + shm_name);
+
         BlockInfo* block_info = new_block_info(0, shm_name);
         if (block_info == nullptr) {
             Throw("watch shm block failed, shm:" + shm_name);
         }
 
-        read_block(block_info->block);
-        _loaded_shm_name_set.insert(shm_name);
-    } 
+        return block_info;
+    }
 
-    void read_block(Block* block) {
-        BlockReader reader(block);
-        Slice row;
-        while(reader.next(row)) {
-            process(row);
+    void update() {
+        while (true) {
+            if (_cur_block_reader == nullptr) {
+                BlockInfo* block_info = next_shm_block();
+                if (block_info == nullptr) {
+                    break;
+                }
+                _cur_block_reader = new BlockReader(block_info->block);
+            } 
+
+            Slice row;
+            while(_cur_block_reader->next(row)) {
+                process(row);
+            }
+
+            if (_cur_block_reader->end()) {
+                delete _cur_block_reader;
+                _cur_block_reader = nullptr;
+            } else {
+                break;
+            }
         }
     }
 
+    //bool parse_shm(const std::string& shm_name) {
+    //    if (_loaded_shm_name_set.find(shm_name) != _loaded_shm_name_set.end()) {
+    //        Log("had loaded shm block:" + shm_name);
+    //        return false;
+    //    }
+    //    BlockInfo* block_info = new_block_info(0, shm_name);
+    //    if (block_info == nullptr) {
+    //        Throw("watch shm block failed, shm:" + shm_name);
+    //    }
+
+    //    read_block(block_info->block);
+    //    _loaded_shm_name_set.insert(shm_name);
+    //    Log("loaded shm block:" + shm_name);
+    //    return true;
+    //} 
 
     bool append(const Slice& data, EnumRowType row_type = RowType_Insert, Slice* output = nullptr) {
         RowHeader row_header;
@@ -208,6 +265,9 @@ public:
         Slice row(data_addr, sizeof(RowHeader) + row_header.len);
         if (_data_index != nullptr) {
             process(row);
+        }
+        if (_table_scale) {
+            _table_scale->data_len += row.size();
         }
         return true;
     }
@@ -229,8 +289,10 @@ public:
                 break;
             case RowType_TableScale: 
                 _table_scale = data.get_ptr<TableScale>();
+                break;
             case RowType_TableSHMMeta: 
                 _table_shm_meta = new TableSHMMeta(data);
+                break;
             default:
                 Throw("unknown row type:" + std::to_string(RowParser::row_type(row)));
         }
@@ -312,12 +374,17 @@ private:
     }
 
     BlockInfo* new_block_info(uint64_t block_size, const std::string& block_name = "") {
-        Block* block = new Block();
         MemoryBlock* memory_block = new_memory_block(block_size, block_name);
         if (memory_block == nullptr) {
             return nullptr;
         }
-        block->init(memory_block);
+
+        Block* block = new Block();
+        if (_table_type == TableType_Watcher) {
+            block->watch(memory_block);
+        } else {
+            block->init(memory_block);
+        }
 
         BlockInfo* block_info = new BlockInfo;
         block_info->block = block;
@@ -420,6 +487,14 @@ private:
         return true;
     }
 
+    void read_block(Block* block) {
+        BlockReader reader(block);
+        Slice row;
+        while(reader.next(row)) {
+            process(row);
+        }
+    }
+
 private:
     std::string _table_name;
     EnumTableType _table_type;
@@ -440,6 +515,11 @@ private:
     std::string _index_column_name;
 
     uint64_t _default_block_size = 1024 * 1024;
+
+    // for watcher
+    BlockReader* _cur_block_reader = nullptr;
+    std::string _first_shm_name;
+    bool _first_shm_loaded = false;
 
 };
 
