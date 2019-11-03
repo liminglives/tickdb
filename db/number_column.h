@@ -12,7 +12,7 @@ using INT16Column = ColumnVector<int16_t>;
 using INT32Column = ColumnVector<int32_t>;
 using INT64Column = ColumnVector<int64_t>;
 
-using Float32Column = ColumnVector<float>;
-using Float64Column = ColumnVector<double>;
+using FLOATColumn = ColumnVector<float>;
+using DOUBLEColumn = ColumnVector<double>;
 
 }
