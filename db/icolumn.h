@@ -6,55 +6,10 @@
 #include <vector>
 #include <string>
 
+#include "tickdb/slice.h"
+
 namespace TickDB {
 
-enum ValueType {
-    UINT8 = 1,
-    UINT16 = 2,
-    UINT32 = 3,
-    UINT64 = 4,
-    INT8 = 5,
-    INT16 = 6,
-    INT32 = 7,
-    INT64 = 8,
-    FLOAT32 = 9,
-    FLOAT64 = 10,
-    STRING = 11,
-};
-
-
-class Value {
-public:
-    Value() : _data(nullptr), _size(0) {};
-    Value(const char* data, const size_t size) : _data(data), _size(size) {};
-    Value(const std::string& str) : _data(str.c_str()), _size(data.size()) {};
-
-    const char* data() {
-        return _data
-    }
-
-    size_t size() {
-        return _size;
-    }
-
-    Value(const Value& v) = default;
-    Value& operator=(const Value& v) = default;
-
-    template <typename T> 
-    T get() {
-        return *(static_cast<T*>(static_cast<void*>(_data)));
-    }
-
-    template <typename T> 
-    const T* get_ptr() {
-        return static_cast<T*>(static_cast<void*>(_data));
-    }
-
-
-private:
-    char* _data;
-    size_t _size;
-};
 
 class IColumn {
 public:
@@ -64,9 +19,11 @@ public:
     IColumn(const IColumn&) = delete;
     IColumn& operator= (const IColumn&) = delete;
 
-    virtual void insert(const Value& val) = 0; 
+    virtual void append(const Slice& val) = 0; 
 
-    virtual Value at(const size_t n) = 0; 
+    virtual Slice at(const size_t pos) = 0; 
+
+    virtual Slice range(const size_t pos_start, const size_t pos_end) = 0; 
 
 };
 
@@ -103,11 +60,23 @@ public:
         return _capacity;
     }
 
-    Value at(const size_t n) {
-        return std::move(Value(_buf[n * sizeof(T)], sizeof(T)));
+    Slice at(const size_t pos) {
+        return Slice(_buf[pos * sizeof(T)], sizeof(T));
     }
 
-    void push_back(const Value& val) {
+    // [pos_start, pos_end]
+    Slice range(const size_t pos_start, const size_t pos_end) {
+        if (pos_end >= len()) {
+            pos_end = len() - 1;
+        }
+        if (pos_end < pos_start) {
+            return Slice();
+        }
+
+        return Slice(_buf[pos_start * sizeof(T)], (pos_end - pos_start + 1) * sizeof(T));
+    }
+
+    void push_back(const Slice& val) {
         if (_len + val.size() > _capacity) { // unlikely
             realloc();
         }
@@ -151,11 +120,11 @@ public:
     ColumnVector(const size_t n, const T& x) :data(n, x) {};
     ~ColumnVector();
 
-    void insert(const Value& val) override {
+    void append(const Slice& val) override {
         data.push_back(val);
     }
 
-    Value at(const size_t n)  override {
+    Slice at(const size_t n)  override {
         return std::move(data.at(n));
     }
 

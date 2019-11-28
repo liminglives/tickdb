@@ -134,13 +134,6 @@ public:
             }
 
             update();
-            //// parse first shm block
-            //if (!parse_shm(opt.shm_name)) {
-            //    Log("parse first shm block failed");
-            //    return false;
-            //}
-            //// update shm block according to first shm block
-            //update_shm();
 
         } else { // TableType_Normal, TableType_Shared
 
@@ -164,47 +157,6 @@ public:
         }
 
         return true;
-    }
-
-    //void update_shm() {
-    //    if (_table_shm_meta == nullptr) {
-    //        return;
-    //    }
-
-    //    std::string shm_name;
-    //    while (_table_shm_meta->next(shm_name)) {
-    //        parse_shm(shm_name);
-    //    }
-    //}
-
-    BlockInfo* next_shm_block() {
-        std::string shm_name;
-        if (!_first_shm_loaded) {
-            shm_name = _first_shm_name;
-            _first_shm_loaded = true;
-        } else {
-            if (!_table_shm_meta->next(shm_name)) {
-                return nullptr;
-            }
-        }
-        if (shm_name.empty()) {
-            Throw("watch shm block name is empty");
-        }
-        
-        if (_loaded_shm_name_set.find(shm_name) != _loaded_shm_name_set.end()) {
-            Log("had loaded shm block:" + shm_name);
-            return nullptr;
-        }
-
-        _loaded_shm_name_set.insert(shm_name);
-        Log("loading shm block:" + shm_name);
-
-        BlockInfo* block_info = new_block_info(0, shm_name);
-        if (block_info == nullptr) {
-            Throw("watch shm block failed, shm:" + shm_name);
-        }
-
-        return block_info;
     }
 
     void update() {
@@ -231,21 +183,6 @@ public:
         }
     }
 
-    //bool parse_shm(const std::string& shm_name) {
-    //    if (_loaded_shm_name_set.find(shm_name) != _loaded_shm_name_set.end()) {
-    //        Log("had loaded shm block:" + shm_name);
-    //        return false;
-    //    }
-    //    BlockInfo* block_info = new_block_info(0, shm_name);
-    //    if (block_info == nullptr) {
-    //        Throw("watch shm block failed, shm:" + shm_name);
-    //    }
-
-    //    read_block(block_info->block);
-    //    _loaded_shm_name_set.insert(shm_name);
-    //    Log("loaded shm block:" + shm_name);
-    //    return true;
-    //} 
 
     bool append(const Slice& data, EnumRowType row_type = RowType_Insert, Slice* output = nullptr) {
         RowHeader row_header;
@@ -270,53 +207,6 @@ public:
             _table_scale->data_len += row.size();
         }
         return true;
-    }
-
-    void process(Slice& row) {
-        RowHeader* row_header = (RowHeader*)(row.data());
-        Slice data(row.data() + sizeof(RowHeader), row_header->len);
-        switch (RowParser::row_type(row)) {
-            case RowType_Insert: 
-                insert_to_index(row);
-                break;
-            case RowType_Del: 
-                del_from_index(row);
-                break;
-            case RowType_TableHeader: 
-                if (_table_type == TableType_Watcher) {
-                    parse_header(data.to_string());
-                }
-                break;
-            case RowType_TableScale: 
-                _table_scale = data.get_ptr<TableScale>();
-                break;
-            case RowType_TableSHMMeta: 
-                _table_shm_meta = new TableSHMMeta(data);
-                break;
-            default:
-                Throw("unknown row type:" + std::to_string(RowParser::row_type(row)));
-        }
-    }
-
-    void insert_to_index(Slice& hrow) {
-        Slice row(hrow);
-        row.remove_prefix(sizeof(RowHeader));
-        Slice index = _data_parser->index(RowParser::row_data(hrow));
-        _data_index->insert(_data_parser->key(RowParser::row_data(hrow)), 
-                   index, row);
-        //if (_index_type == IndexType_TimeSeries) {
-        //    BlockInfo* block_info = get_latest_block_info();
-        //    uint64_t int_ts = index.get<uint64_t>();
-        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
-        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
-
-        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
-        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
-        //}
-    }
-
-    void del_from_index(Slice& hrow) {
-        _data_index->del(hrow);
     }
 
     // [ts_start, ts_end]
@@ -401,6 +291,54 @@ private:
 
         return _block_info_vec.back();
     }
+
+    void process(Slice& row) {
+        RowHeader* row_header = (RowHeader*)(row.data());
+        Slice data(row.data() + sizeof(RowHeader), row_header->len);
+        switch (RowParser::row_type(row)) {
+            case RowType_Insert: 
+                insert_to_index(row);
+                break;
+            case RowType_Del: 
+                del_from_index(row);
+                break;
+            case RowType_TableHeader: 
+                if (_table_type == TableType_Watcher) {
+                    parse_header(data.to_string());
+                }
+                break;
+            case RowType_TableScale: 
+                _table_scale = data.get_ptr<TableScale>();
+                break;
+            case RowType_TableSHMMeta: 
+                _table_shm_meta = new TableSHMMeta(data);
+                break;
+            default:
+                Throw("unknown row type:" + std::to_string(RowParser::row_type(row)));
+        }
+    }
+
+    void insert_to_index(Slice& hrow) {
+        Slice row(hrow);
+        row.remove_prefix(sizeof(RowHeader));
+        Slice index = _data_parser->index(RowParser::row_data(hrow));
+        _data_index->insert(_data_parser->key(RowParser::row_data(hrow)), 
+                   index, row);
+        //if (_index_type == IndexType_TimeSeries) {
+        //    BlockInfo* block_info = get_latest_block_info();
+        //    uint64_t int_ts = index.get<uint64_t>();
+        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
+        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
+
+        //    block_info->ts_start = std::min(int_ts, block_info->ts_start);
+        //    block_info->ts_end = std::max(int_ts, block_info->ts_end);
+        //}
+    }
+
+    void del_from_index(Slice& hrow) {
+        _data_index->del(hrow);
+    }
+
 
     bool parse_header(const std::string& header) {
         std::vector<std::string> header_lines = Util::to_lines(header);
@@ -487,13 +425,36 @@ private:
         return true;
     }
 
-    void read_block(Block* block) {
-        BlockReader reader(block);
-        Slice row;
-        while(reader.next(row)) {
-            process(row);
+    BlockInfo* next_shm_block() {
+        std::string shm_name;
+        if (!_first_shm_loaded) {
+            shm_name = _first_shm_name;
+            _first_shm_loaded = true;
+        } else {
+            if (!_table_shm_meta->next(shm_name)) {
+                return nullptr;
+            }
         }
+        if (shm_name.empty()) {
+            Throw("watch shm block name is empty");
+        }
+        
+        if (_loaded_shm_name_set.find(shm_name) != _loaded_shm_name_set.end()) {
+            Log("had loaded shm block:" + shm_name);
+            return nullptr;
+        }
+
+        _loaded_shm_name_set.insert(shm_name);
+        Log("loading shm block:" + shm_name);
+
+        BlockInfo* block_info = new_block_info(0, shm_name);
+        if (block_info == nullptr) {
+            Throw("watch shm block failed, shm:" + shm_name);
+        }
+
+        return block_info;
     }
+
 
 private:
     std::string _table_name;

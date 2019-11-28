@@ -2,8 +2,8 @@
 
 class ColumnTable {
 public:
-    Table() {}
-    ~Table() {
+    ColumnTable() {}
+    ~ColumnTable() {
         for (auto it : _column_map) {
             delete it.second;
         }
@@ -53,7 +53,7 @@ public:
             const std::vector<uint64_t>& time_vec, 
             std::unordered_map<std::string, Slice>& res);
 
-    IColumn* get_column(const std::string& col) {
+    Column* get_column(const std::string& col) {
         auto it = _column_map.find(col);
         return it == _column_map.end() ? nullptr : it->second;
     }
