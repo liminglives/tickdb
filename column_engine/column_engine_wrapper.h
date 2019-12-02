@@ -1,3 +1,4 @@
+#pragma once
 #include "column_engine_types.h"
 
 namespace TickDB
@@ -30,6 +31,7 @@ private:
     
 using StructWrapper<TableSchema> TableSchemaWrapper;
 using StructWrapper<SessionInfo> SessionInfoWrapper;
+using StructWrapper<TableController> TableControllerWrapper;
 
 }
 }

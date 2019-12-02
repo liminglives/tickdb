@@ -53,6 +53,12 @@ struct SessionInfo
     uint64_t endEpochUsecond;
 };
 
+struct TableController
+{
+    TableSchema schema;
+    vector<SessionInfo> sessions;
+}
+
 struct RowData
 {
     std::vector<char*> rows;
