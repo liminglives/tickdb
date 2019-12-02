@@ -32,6 +32,7 @@ struct TableSchema
     std::string tableName;
     std::vector<ColumnMeta> columns;
     uint32_t oneRowLength;
+    uint32_t columnNumber;
     uint32_t rowNumber;
     uint32_t keyColumnId;
     std::string keyColumn;
